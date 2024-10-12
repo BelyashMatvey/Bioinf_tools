@@ -1,22 +1,31 @@
-from typing import Dict, Union, List, Set
+from typing import Union, List, Set
 
-from modules import transcribe, transcribe_dna_complement, reverse, reverse_complement, complement
-from modules.const_dicts_and_strs import error_string, error_string_rna
+from modules import write_fastq, utils
+from modules.utils import is_bounded
+
+operations = {
+    'transcribe': utils.transcribe,
+    'reverse': utils.reverse,
+    'complement': utils.complement,
+    'transcribe_dna_complement': utils.transcribe_dna_complement,
+    'reverse_complement': utils.reverse_complement
+}
 
 
-def filter_fastq(seqs: Dict[str, tuple[str, str]], gc_bounds: Union[int, tuple[int, int]] = None,
-                 length_bounds: Union[int, tuple[int, int]] = None, quality_threshold: int = None) -> Dict[str, tuple[str, str]]:
+def filter_fastq(input_fastq: str, output_fastq: str, gc_bounds: Union[int, tuple[int, int]] = None,
+                 length_bounds: Union[int, tuple[int, int]] = None, quality_threshold: int = None) -> None:
     """
-    Функция filter_fastq
-    Применение - На вход функции подается словарь, где ключ - название последовательности, а значение - список вида
-    [последовательность,качество прочтения последовательности]. Используя параметры gc_bounds, length_bounds, и
-    quality_threshold функция фильтрует значения словаря и выводит только те элементы словаря, которые подходят под
-    заданные условия.
-    Аттрибуты
+    Function filter_fastq
+    Application - The function input is the name of the file with data in fastq format. Using the parameters gc_bounds, length_bounds, and
+    the quality_threshold function filters the lines of the file and writes to the final file only those that match
+    given conditions. To write a file, the function uses the write_fastq module from modules. Writing to a file occurs line by line.
+    If the file already exists, it will not be overwritten and an error will be displayed.
+    Attributes
     ----------
-    seqs : Dict[str, tuple[str, str]]
-        seqs - словарь, состоящий из fastq-сиквенсов. Структура следующая. Ключ - строка, имя последовательности.
-        Значение - кортеж из двух строк: последовательность и качество.
+    input_fastq: str
+        Input file name
+    output_fastq: str
+        Output file name
     gc_bounds: int или tuple[int,int]
         gc_bounds - интервал GC состава (в процентах).
         Если в аргумент передать одно число, то считается, что это верхняя граница.
@@ -31,37 +40,55 @@ def filter_fastq(seqs: Dict[str, tuple[str, str]], gc_bounds: Union[int, tuple[i
         gc_bounds = (0, 100)
     if quality_threshold is None:
         quality_threshold = 0
-    result_seqs: Dict[str, tuple[str, str]] = {}
-    for name, fastq in seqs.items():
-        if isinstance(gc_bounds, int):
-            gc_bounds = (0, gc_bounds)
-        if isinstance(length_bounds, int):
-            length_bounds = (0, length_bounds)
-        gc_content: float = (fastq[0].count('G') + fastq[0].count('C')) / len(fastq[0]) * 100
-        threshold: int = 0
-        for char in fastq[1]:
-            threshold += ord(char) - 33
-        threshold /= len(fastq[0])
-        if length_bounds[0] <= len(fastq[0]) <= length_bounds[1] and gc_bounds[0] <= gc_content <= gc_bounds[1] \
-                and threshold >= quality_threshold:
-            result_seqs[name] = fastq
-
-    return result_seqs
+    if isinstance(gc_bounds, int):
+        gc_bounds = (0, gc_bounds)
+    if isinstance(length_bounds, int):
+        length_bounds = (0, length_bounds)
+    try:
+        file = open('filtered/' + output_fastq)
+    except IOError:
+        pass
+    else:
+        print('Файл уже существует')
+        return
+    with open(input_fastq) as file:
+        seq_name: str = file.readline().split()[0]
+        seq: str = file.readline().rstrip('\n')
+        quality_name: str = file.readline().rstrip('\n')
+        quality: str = file.readline().rstrip('\n')
+        while seq_name:
+            gc_content: float = (seq.count('G') + seq.count('C')) / len(seq) * 100
+            threshold: int = 0
+            for char in quality:
+                threshold += ord(char) - 33
+            threshold /= len(seq)
+            if is_bounded(length_bounds, len(seq)) and is_bounded(gc_bounds,
+                                                                  gc_content) and threshold >= quality_threshold:
+                write_fastq.write_fastq(seq_name + '\n' + seq + '\n+\n' + quality + '\n', output_fastq)
+            seq_name_valid: List[str] = file.readline().split()
+            if len(seq_name_valid):
+                seq_name: str = seq_name_valid[0]
+            else:
+                break
+            seq_name = seq_name_valid[0]
+            seq = file.readline().rstrip('\n')
+            quality_name: str = file.readline().rstrip('\n')
+            quality: str = file.readline().rstrip('\n')
 
 
 def run_dna_rna_tools(*args: str) -> Union[str, List[str]]:
     """
-    Функция run_dna_rna_tools
-    Применение - На вход функции подается несколько строковых значений, последнее из которых - тип применяемой операции к последовательностям.
-    Данная функция возвращает результат применяемой операции к последовательности, если её возможно совершить, в противном случае выводится:
-        1. error_string = 'Некорректный ввод: строка должна быть либо ДНК, либо РНК', если последовательность не является ДНК или РНК
-        2. error_string_rna = "Строка должна быть ДНК. Дана строка РНК", если операцию transcribe_dna_complement пытаются применить
-        к РНК последовательности.
+    Function run_dna_rna_tools
+    Application - Several string values are supplied to the function input, the last of which is the type of operation applied to the sequences.
+    This function returns the result of the applied operation to the sequence, if it is possible to perform it, otherwise it is printed:
+        1. error_string = 'Invalid input: string must be either DNA or RNA', if the sequence is not DNA or RNA
+        2. error_string_rna = "The string must be DNA. Given an RNA string", if the operation transcribe_dna_complement is attempted
+        to RNA sequence.
 
-    Аттрибуты
+    Attributes
     ----------
     *args : str или List[str]
-        args - кортеж, содержащий в себе все последоватности входных данных и операцию, применяемую к ним.
+        args - a tuple containing all sequences of input data and the operation applied to them.
     """
     operator: str = args[-1]
     seqs: Union[str, List[str]] = list(args[:-1])
@@ -71,48 +98,27 @@ def run_dna_rna_tools(*args: str) -> Union[str, List[str]]:
     type_: List[int] = []
     for ind in range(len(seqs)):
         letters: Set[str] = set(seqs[ind])
-        checker = all(ch in "AUTGCautgc" for ch in letters) and any(ch1 not in letters for ch1 in "TUtu")
+        checker = all(ch in "AUTGCautgc" for ch in letters) and not (
+                any(ch in 'Tt' for ch in letters) and any(ch in 'Uu' for ch in letters))
         if not checker:
-            correct_seqs.append(error_string)
+            correct_seqs.append(utils.error_string)
             continue
         correct_seqs.append(seqs[ind])
         if 'U' in letters or 'u' in letters:
             type_.append(0)
             continue
         type_.append(1)
-    if operator == "transcribe":
-        for seq in range(len(correct_seqs)):
-            if correct_seqs[seq] != error_string:
-                output.append(transcribe.transcribe(correct_seqs[seq], type_[seq]))
-            else:
-                output.append(correct_seqs[seq])
-    elif operator == 'reverse':
-        for seq in range(len(correct_seqs)):
-            if correct_seqs[seq] != error_string:
-                output.append(reverse.reverse(correct_seqs[seq]))
-            else:
-                output.append(correct_seqs[seq])
-    elif operator == "complement":
-        for seq in range(len(correct_seqs)):
-            if correct_seqs[seq] != error_string:
-                output.append(complement.complement(correct_seqs[seq], type_[seq]))
-            else:
-                output.append(correct_seqs[seq])
-    elif operator == "transcribe_dna_complement":
-        for seq in range(len(correct_seqs)):
-            if correct_seqs[seq] != error_string:
+    for seq in range(len(correct_seqs)):
+        if correct_seqs[seq] != utils.error_string:
+            if operator == 'transcribe_dna_complement':
                 if not type_[seq]:
-                    output.append(error_string_rna)
+                    output.append(utils.error_string_rna)
                     continue
-                output.append(transcribe_dna_complement.transcribe_dna_complement(correct_seqs[seq]))
-            else:
-                output.append(correct_seqs[seq])
-    else:
-        for seq in range(len(correct_seqs)):
-            if correct_seqs[seq] != error_string:
-                output.append(reverse_complement.reverse_complement(correct_seqs[seq], type_[seq]))
-            else:
-                output.append(correct_seqs[seq])
+            if correct_seqs[seq] != utils.error_string:
+                output.append(operations[operator](correct_seqs[seq], type_[seq]))
+        else:
+            output.append(correct_seqs[seq])
+
     if len(output) > 1:
         return output
     return output[0]
