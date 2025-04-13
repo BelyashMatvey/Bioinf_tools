@@ -6,6 +6,7 @@ data in _fastq_ format.
 
 ## Contents
 - [Functions](#main-functions)
+- [Classes](#classes)
 - [Data](#data)
 - [Authors](#authors)
 
@@ -18,12 +19,6 @@ it doesn’t exist yet), it creates a file called output_file and writes filtere
 If the file already exists, the function does not overwrite it and displays an error. To write to a file, use the module
 _write_fastq_ from the _modules_ package.
 
-### run_dna_rna_tools
-**run_dna_rna_tools** takes as input several strings of nucleic acids and an operation, 
-which needs to be done on them. Returns the result of an operation for each given sequence.
-The function uses the _modules_ package containing the _utils_ module for the corresponding operations. If the operation cannot be
-a given nucleotide sequence is used or the input string is not a nucleotide sequence -
-the corresponding error is displayed.
 #### Возможные операции:
  - **complement** - returns the complementary sequence of the given one
  - **reverse** - returns the unwrapped sequence
@@ -40,6 +35,40 @@ file called output_file.
 **convert_multiline_fasta_to_oneline** takes as input the name of the file with fasta format data and each sequence, 
 which can be split into multiple lines, is read from the file and written to a new file called output_fastq, 
 and all sequences will be written on one line.
+
+<a name="classes"><h2>Classes</h2></a>
+### BiologicalSequence
+**BiologicalSequence** - abstract class, that contains 4 dunder methods and one method:
+1. '__len__'(self) - returns the length of sequence
+2. '__getitem__'(self, index) - returns character from sequence  or slice
+3. '__str__'(self) - returns sequence
+4. '__repr__'(self) - returns string representation of class
+5. validate - abstract method that returns 
+
+### NucleicAcidSequence
+**NucleicAcidSequence** - child class of BiologicalSequence. Contains 4 methods:
+1. type_sequence(self) - returns 0 if sequence is RNA and 1 if DNA
+2. complement(self) - returns complement sequence of given one.
+3. reverse(self) - returns reversed sequence.
+4. reverse_complement(self) - returns reversed and complement sequence.
+ 
+### DNASequence
+**DNASequence** - child class of NucleicAcidSequence. Contains two attributes and two classes:
+1. DNA - contains DNA alphabet (A,T,G,C)
+2. COMPLEMENT - Dictionary of complement nucleotides
+3. validate - raise ValueError if DNA sequence is incorrect
+4. transcribe - returns RNA sequence after transcribing DNA.
+
+### RNASequence
+**RNASequence** - child class of NucleicAcidSequence. Contains two attributes and one classes:
+1. DNA - contains DNA alphabet (A,U,G,C)
+2. COMPLEMENT - Dictionary of complement nucleotides
+3. validate - raise ValueError if RNA sequence is incorrect
+
+### AMINOSequence
+**AMINOSequence - child class of BiologicalSequence. Contains 1 method and 1 attribute: 
+1. AMINO - contains AMINO alphabet 
+2. validate - raise ValueError if amino acid  sequence is incorrect
 
 <a name="data"><h2>Data</h2></a>
 The _modules_ package contains the _utils_ module, which contains dictionaries for operations with nucleic acids and the texts of the corresponding 
