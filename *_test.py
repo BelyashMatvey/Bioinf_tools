@@ -25,7 +25,7 @@ class TestValidFiltering:
         with runner.isolated_filesystem():
             result = runner.invoke(filter_fastq,
                                    [input_path, "out.fastq", "--gc_bounds", "40,60", "--length_bounds", "2,10",
-                                    "--quality_threshold", "30"],catch_exceptions=False)
+                                    "--quality_threshold", "30"], catch_exceptions=False)
             assert result.exit_code == 0
             assert os.path.exists("filtered/out.fastq")
             with open("filtered/out.fastq") as f:
@@ -77,14 +77,17 @@ class TestErrors:
             result = runner.invoke(filter_fastq, [input_path, "out.fastq"])
             assert "Файл уже существует" in result.output
             assert result.exit_code == 0
+
     def test_invalid_gc_format(self):
-        content="@read1\nATGC\n+\nIIII\n"
-        input_path=create_fastq_file(content)
-        runner=CliRunner()
+        content = "@read1\nATGC\n+\nIIII\n"
+        input_path = create_fastq_file(content)
+        runner = CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(filter_fastq, [input_path, "out.fastq", "--gc_bounds", "10,20,30"])
             assert result.exit_code != 0
             assert "gc_bounds должен быть" in result.output
+
+
 class TestIO:
     def test_written_correct(self):
         content = "@read1\nATGC\n+\nIIII\n"
@@ -98,6 +101,7 @@ class TestIO:
             records = list(SeqIO.parse(path, "fastq"))
             assert len(records) == 1
             assert records[0].id == "read1"
+
     def test_multiple_reads(self):
         content = (
             "@read1\nATGC\n+\nIIII\n"
