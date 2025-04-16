@@ -2,8 +2,16 @@ from typing import Union
 from abc import ABC, abstractmethod
 import os
 import numpy as np
-
+import click
 from Bio import SeqIO, SeqUtils
+import logging
+
+logging.basicConfig(
+    filename='filter_fastq.log',
+    filemode='w',
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 
 def is_bounded(bounds: tuple[int, int], x: Union[int, float]) -> bool:
@@ -20,8 +28,16 @@ def is_bounded(bounds: tuple[int, int], x: Union[int, float]) -> bool:
     return bounds[0] <= x <= bounds[1]
 
 
-def filter_fastq(input_fastq: str, output_fastq: str, gc_bounds: Union[int, tuple[int, int]] = None,
-                 length_bounds: Union[int, tuple[int, int]] = None, quality_threshold: int = None) -> None:
+@click.command()
+@click.argument('input_fastq', type=click.Path(exists=True))
+@click.argument('output_fastq', type=str)
+@click.option('--gc_bounds', default=None, type=str,
+              help="GC content bounds: 'max' или 'min,max'")
+@click.option('--length_bounds', default=None, type=str,
+              help="Length bounds: 'max' или 'min,max'")
+@click.option('--quality_threshold', default=0, type=int,
+              help="Минимальное среднее качество рида (по шкале Phred33)")
+def filter_fastq(input_fastq, output_fastq, gc_bounds, length_bounds, quality_threshold) -> None:
     """
     Function filter_fastq
     Application - The function input is the name of the file with data in fastq format. Using the parameters gc_bounds, length_bounds, and
@@ -42,16 +58,31 @@ def filter_fastq(input_fastq: str, output_fastq: str, gc_bounds: Union[int, tupl
     quality_threshold: int
         Пороговое значение среднего качества рида для фильтрации, по-умолчанию равно 0 (шкала phred33).
     """
-    if length_bounds is None:
-        length_bounds = (0, 2 ** 32)
+    logging.info(f"Запуск фильтрации: input={input_fastq},output={output_fastq}, "
+                 f"gc_bounds={gc_bounds}, length_bounds={length_bounds}, "
+                 f'quality_threshold={quality_threshold}')
     if gc_bounds is None:
         gc_bounds = (0, 100)
-    if quality_threshold is None:
-        quality_threshold = 0
-    if isinstance(gc_bounds, int):
-        gc_bounds = (0, gc_bounds)
-    if isinstance(length_bounds, int):
-        length_bounds = (0, length_bounds)
+    else:
+        parts = list(map(int, gc_bounds.split(',')))
+        if len(parts) == 1:
+            gc_bounds = (0, parts[0])
+        elif len(parts) == 2:
+            gc_bounds = tuple(parts)
+        else:
+            logging.error("Неверный формат gc_bounds.")
+            raise click.BadParameter("gc_bounds должен быть 'max' или 'min,max'")
+
+    if length_bounds is None:
+        length_bounds = (0, 2 ** 32)
+    else:
+        parts = list(map(int, length_bounds.split(',')))
+        if len(parts) == 1:
+            length_bounds = (0, parts[0])
+        elif len(parts) == 2:
+            length_bounds = tuple(parts)
+        else:
+            raise click.BadParameter("length_bounds должен быть 'max' или 'min,max'")
     try:
         file = open('filtered/' + output_fastq)
     except IOError:
@@ -69,9 +100,8 @@ def filter_fastq(input_fastq: str, output_fastq: str, gc_bounds: Union[int, tupl
                                                               gc_content) and threshold >= quality_threshold:
             os.makedirs('filtered', exist_ok=True)
             file = open('filtered/' + output_fastq, 'a+')
-            file.write(seq_name + '\n' + seq + '\n+\n' + quality + '\n')
+            file.write(f"@{seq_name}\n{str(seq)}\n+\n{''.join(chr(q + 33) for q in quality)}\n")
             file.close()
-
 
 
 class BiologicalSequence(ABC):
